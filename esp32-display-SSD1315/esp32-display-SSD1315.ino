@@ -19,6 +19,7 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 // VL53L0X sensor pins
 #define VL53L0X_SDA 18
 #define VL53L0X_SCL 19
+#define LIGHT_SENSOR_PIN 36  // Changed to GPIO36 (ADC1_CH0)
 #define LAUGHING_THRESHOLD 200  // Distance in mm to trigger laughing state
 #define SCARED_THRESHOLD 100   // Distance in mm to trigger scared state
 
@@ -27,6 +28,8 @@ VL53L0X sensor;
 TwoWire I2Ctwo = TwoWire(1);  // Use I2C bus 1
 unsigned long lastSensorRead = 0;
 const unsigned long SENSOR_READ_INTERVAL = 100;  // Read sensor every ... second
+unsigned long lastLightRead = 0;  // For light sensor reading
+const unsigned long LIGHT_READ_INTERVAL = 1000;  // Read light sensor every second
 bool isInteracting = false;
 
 // Emotion states
@@ -129,12 +132,17 @@ void setState(EmotionState newState);
 
 void setup() {
   Serial.begin(9600);
+  Serial.println("Starting up...");
   delay(250);                        // wait for the OLED to power up
   display.begin(i2c_Address, true);  // Address 0x3C default
   display.clearDisplay();
   display.display();
   lastStateChange = millis();
   lastPupilMove = millis();
+
+  // Initialize light sensor pin and ADC
+  pinMode(LIGHT_SENSOR_PIN, INPUT);
+  analogSetAttenuation(ADC_11db);  // Set ADC attenuation for full 0-3.3V range
 
   // Initialize VL53L0X sensor
   I2Ctwo.begin(VL53L0X_SDA, VL53L0X_SCL, 100000);  // Initialize with 100kHz
@@ -156,8 +164,19 @@ void setup() {
 }
 
 void loop() {
-  // Read sensor every 0.1 seconds
+  // Read light sensor every second
   unsigned long currentTime = millis();
+  if (currentTime - lastLightRead >= LIGHT_READ_INTERVAL) {
+    int lightValue = analogRead(LIGHT_SENSOR_PIN);
+    Serial.print("Light sensor value: ");
+    Serial.print(lightValue);
+    Serial.print(" (Pin: ");
+    Serial.print(LIGHT_SENSOR_PIN);
+    Serial.println(")");
+    lastLightRead = currentTime;
+  }
+
+  // Read sensor every 0.1 seconds
   if (currentTime - lastSensorRead >= SENSOR_READ_INTERVAL) {
     uint16_t distance = sensor.readRangeContinuousMillimeters();
     if (sensor.timeoutOccurred()) {
